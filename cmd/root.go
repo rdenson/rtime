@@ -26,6 +26,7 @@ type ResourceResult struct {
 var AnalyzeTls bool
 var Insecure bool
 var ShowHeaders bool
+var ShowResourceRequests bool
 var rootCmd = &cobra.Command{
   Use: "rtime",
   Short: "rtime is for request timing and analysis",
@@ -120,29 +121,6 @@ var pageCmd = &cobra.Command{
     resourcesRequestStart := time.Now()
     for _, resource := range resourcesToResolve {
       resourceWg.Add(1)
-      /*
-      go func(resourceLoc string, hc *http.Client, ch chan ResourceResult, wg *sync.WaitGroup) {
-        defer wg.Done()
-        req, newRequestErr := http.NewRequest("GET", resourceLoc, nil)
-        if newRequestErr != nil {
-          fmt.Printf("%+v\n", newRequestErr)
-          return
-        }
-        req.Close = true
-        requestStart := time.Now()
-        resp, respErr := hc.Do(req)
-        currentResult := ResourceResult{
-          RequestErr: respErr,
-          ResourceUrl: resourceLoc,
-          Timing: time.Now().Sub(requestStart),
-        }
-        if respErr == nil {
-          currentResult.RequestStatus = resp.StatusCode
-        }
-
-        ch <- currentResult
-      }(fmt.Sprintf("%s%s", formattedUrl.String(), resource), httpClient, timingCh, resourceWg)
-      */
       go getResourceAsync(
         fmt.Sprintf("%s%s", formattedUrl.String(), resource),
         httpClient,
@@ -152,25 +130,34 @@ var pageCmd = &cobra.Command{
     }
 
     resourceWg.Wait()
-    fmt.Printf("finished getting associated resources in %s\n", time.Now().Sub(resourcesRequestStart))
+    fmt.Printf("%4sfinished getting associated resources in %s\n", " ", time.Now().Sub(resourcesRequestStart))
     close(timingCh)
     var largestResourceRequestTime time.Duration
     for _, t := range timings {
-      // fmt.Printf("  a request finished at %s\n", rt)
-      // fmt.Printf("  %d - %s %s\n", t.RequestStatus, t.ResourceUrl, t.Timing)
       if t.Timing > largestResourceRequestTime {
         largestResourceRequestTime = t.Timing
       }
     }
 
-    fmt.Printf("longest associated resource request time: %s\n", largestResourceRequestTime)
+    fmt.Printf("%4slongest associated resource request time: %s\n", " ", largestResourceRequestTime)
     fmt.Printf("total request estimated at %s\n", intialRequestTime + largestResourceRequestTime)
+
     if showHeaders, _ := cmd.Flags().GetBool("show-headers"); showHeaders {
       showResponseHeaders(resp)
     }
 
-    if requestInsecure, _ := cmd.Flags().GetBool("analyze-tls"); requestInsecure {
+    if analyzeTls, _ := cmd.Flags().GetBool("analyze-tls"); analyzeTls {
       showResponseTlsInfo(resp)
+    }
+
+    if showResourceRequests, _ := cmd.Flags().GetBool("show-resource-requests"); showResourceRequests {
+      fmt.Println()
+      fmt.Println("resources parsed from initial request body:")
+      for _, t := range timings {
+        fmt.Printf("%5s %s %5d - %s\n", " ", t.Timing, t.RequestStatus, t.ResourceUrl)
+      }
+
+      fmt.Println()
     }
 
     return nil
@@ -191,6 +178,7 @@ func init() {
   rootCmd.PersistentFlags().BoolVarP(&Insecure, "insecure", "", false, "make insecure request(s); sans https")
   rootCmd.PersistentFlags().BoolVarP(&AnalyzeTls, "analyze-tls", "", false, "show TLS information from response")
   rootCmd.PersistentFlags().BoolVarP(&ShowHeaders, "show-headers", "", false, "show headers from final request")
+  pageCmd.Flags().BoolVarP(&ShowResourceRequests, "show-resource-requests", "", false, "show request responses for associated resources")
 }
 
 func formatUrl(host string, secure bool) string {
@@ -273,6 +261,7 @@ func showResponseTlsInfo(resp *http.Response) {
     0x0304: "TLS 1.3",
   }
 
+  fmt.Println()
   fmt.Printf(
     "TLS Connection Info\n%s\ncipher suite:%27s\nversion:%17s\nassociated certs:%2d\n",
     "-------------------",
