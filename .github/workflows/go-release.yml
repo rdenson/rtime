@@ -21,14 +21,14 @@ jobs:
     - name: print os, arch and binary name info
       run: |
         GOOS=darwin
-        GOARCH=darwin
-        BINARY_NAME=${{github.repository}}-$GOOS-$GOARCH
-        echo "BINARY_NAME=$BINARY_NAME" >> $GITHUB_ENV
-        echo "GOOS=$GOOS" >> $GITHUB_ENV
-        echo "GOARCH=$GOARCH" >> $GITHUB_ENV
+        GOARCH=amd64
+        BINARY_NAME=rtime-$GOOS-$GOARCH
+        echo "BINARY_NAME=${{ BINARY_NAME }" >> $GITHUB_ENV
+        echo "GOOS=${{ GOOS }}" >> $GITHUB_ENV
+        echo "GOARCH=${{ GOARCH }}" >> $GITHUB_ENV
 
     - name: Build
-      run: go build -v -o "$BINARY_NAME"
+      run: go build -v -o "${{ BINARY_NAME }}"
       env:
         goos: $GOOS
         goarch: $GOARCH

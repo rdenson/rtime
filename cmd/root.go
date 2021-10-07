@@ -27,6 +27,7 @@ var AnalyzeTls bool
 var Insecure bool
 var ShowHeaders bool
 var ShowResourceRequests bool
+var ToolVersion string = "local"
 var rootCmd = &cobra.Command{
   Use: "rtime",
   Short: "rtime is for request timing and analysis",
@@ -163,6 +164,14 @@ var pageCmd = &cobra.Command{
     return nil
   },
 }
+var versionCmd = &cobra.Command{
+  Use: "version",
+  Short: "show the version",
+  Long: "...",
+  Run: func(cmd *cobra.Command, args []string) {
+    fmt.Printf("⏱  rtime - request timing and analysis\n   version: %s\n", ToolVersion)
+  },
+}
 
 func Execute() {
   if err := rootCmd.Execute(); err != nil {
@@ -172,8 +181,9 @@ func Execute() {
 }
 
 func init() {
-  rootCmd.AddCommand(pageCmd)
   rootCmd.AddCommand(endpointCmd)
+  rootCmd.AddCommand(pageCmd)
+  rootCmd.AddCommand(versionCmd)
 
   rootCmd.PersistentFlags().BoolVarP(&Insecure, "insecure", "", false, "make insecure request(s); sans https")
   rootCmd.PersistentFlags().BoolVarP(&AnalyzeTls, "analyze-tls", "", false, "show TLS information from response")
