@@ -10,20 +10,31 @@ jobs:
     runs-on: macos-latest
     steps:
     - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
         go-version: 1.17
 
+    - name: print os, arch and binary name info
+      run: |
+        GOOS=darwin
+        GOARCH=darwin
+        BINARY_NAME=${{github.repository}}-$GOOS-$GOARCH
+        echo "BINARY_NAME=$BINARY_NAME" >> $GITHUB_ENV
+        echo "GOOS=$GOOS" >> $GITHUB_ENV
+        echo "GOARCH=$GOARCH" >> $GITHUB_ENV
+
     - name: Build
-      run: go build -v -o rtime
+      run: go build -v -o "$BINARY_NAME"
       env:
-        goos: darwin
-        goarch: darwin
+        goos: $GOOS
+        goarch: $GOARCH
         ldflags: "-s -w"
 
     - uses: actions/upload-artifact@v2
       with:
-        name: rtime
+        name: $BINARY_NAME
         path: ${{ github.workspace }}
