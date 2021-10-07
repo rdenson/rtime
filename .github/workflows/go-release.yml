@@ -23,7 +23,7 @@ jobs:
         GOOS=darwin
         GOARCH=amd64
         BINARY_NAME=rtime-$GOOS-$GOARCH
-        echo "BINARY_NAME=${{ BINARY_NAME }" >> $GITHUB_ENV
+        echo "BINARY_NAME=${{ BINARY_NAME }}" >> $GITHUB_ENV
         echo "GOOS=${{ GOOS }}" >> $GITHUB_ENV
         echo "GOARCH=${{ GOARCH }}" >> $GITHUB_ENV
 
