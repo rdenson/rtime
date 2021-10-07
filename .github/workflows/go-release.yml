@@ -5,6 +5,10 @@ on:
     types:
       - created
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   build:
     runs-on: macos-latest
