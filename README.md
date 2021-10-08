@@ -1,5 +1,5 @@
 # rtime - a tool for request timing and analysis
-[![Go](https://github.com/rdenson/rtime/actions/workflows/go-release.yml/badge.svg?branch=0.0.2-beta)](https://github.com/rdenson/rtime/actions/workflows/go-release.yml)
+[![Github tag](https://badgen.net/github/tag/rdenson/rtime)](https://github.com/rdenson/rtime/tags/) [![Go](https://github.com/rdenson/rtime/actions/workflows/go-release.yml/badge.svg?branch=0.0.2-beta)](https://github.com/rdenson/rtime/actions/workflows/go-release.yml)
 
 rtime (_requestTime_) attempts to request a specified URL to determine how fast
 your pages or endpoints are loading.
