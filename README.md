@@ -25,7 +25,7 @@ rtime uses cobra, more examples specific to your shell can be found 👉  [here]
 ```sh
 # on mac os + zsh
 # assuming download from releases
-cd ~/Downloads/rtime_<tag>_os_arch/
+cd ~/Downloads/rtime_<tag>_<os>_<arch>/
 cp rtime /usr/local/bin/
 # set up command completion
 # see https://github.com/spf13/cobra/blob/master/shell_completions.md (zsh section)
