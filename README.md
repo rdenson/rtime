@@ -6,9 +6,9 @@ your pages or endpoints are loading.
 
 ## Two Paths - Request Scenarios
 1. GET a resource that we know will return some HTML
-  * see if we can resolve any known resources referenced in the returned HTML
-  * estimate the timing of the total resources requested
-1. GET an arbitrary resource
+   * see if we can resolve any known resources referenced in the returned HTML
+   * estimate the timing of the total resources requested
+2. GET an arbitrary resource
 
 In addition to timing a request, you can see some general information about the
 request:
