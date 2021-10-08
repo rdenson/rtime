@@ -23,154 +23,13 @@ type ResourceResult struct {
   Timing time.Duration
 }
 
-var AnalyzeTls bool
-var Insecure bool
-var ShowHeaders bool
-var ShowResourceRequests bool
-var ToolVersion string = "local"
+
 var rootCmd = &cobra.Command{
   Use: "rtime",
   Short: "rtime is for request timing and analysis",
   Long: `Command-line request timer and inspector.
   Makes request(s) to a page or a specific resource (endpoint). Get additional
   information such response headers or TLS connection data.`,
-}
-var endpointCmd = &cobra.Command{
-  Use: "endpoint [url]",
-  Short: "request a specific resource",
-  Long: `Attempts to request the specified URL. Does not inspect the response
-  body.`,
-  RunE: func(cmd *cobra.Command, args []string) error {
-    fmt.Println("not yet implemented")
-    return nil
-  },
-}
-var pageCmd = &cobra.Command{
-  Use: "page [url]",
-  Short: "request a page, just as you would in your browser",
-  Long: `Attempts to request the specified URL and resolve any associated
-  resources. eg. css, images, scripts, etc. Requests for additional
-  resources are made concurrently.`,
-  RunE: func(cmd *cobra.Command, args []string) error {
-    var (
-      insecureTransport *http.Transport = &http.Transport{
-        DisableCompression: true,
-        IdleConnTimeout: 30 * time.Second,
-        MaxIdleConns: 10,
-        TLSClientConfig: &tls.Config {
-          InsecureSkipVerify: true,
-        },
-      }
-      standardTransport *http.Transport = &http.Transport{
-        DisableCompression: true,
-        IdleConnTimeout: 30 * time.Second,
-        MaxIdleConns: 10,
-      }
-    )
-
-    httpClient := &http.Client{
-      CheckRedirect: func(req *http.Request, via []*http.Request) error {
-        fmt.Printf(
-          "%4sredirect! got %d, now requesting: %s\n",
-          " ",
-          req.Response.StatusCode, req.URL.String(),
-        )
-        //just return the initial response
-        // return http.ErrUseLastResponse
-        return nil
-      },
-      Timeout: 30 * time.Second,
-      Transport: standardTransport,
-    }
-
-    formattedUrl, urlParseErr := url.Parse(args[0])
-    if urlParseErr != nil {
-      return urlParseErr
-    }
-
-    formattedUrl.Scheme = "https"
-    if requestInsecure, _ := cmd.Flags().GetBool("insecure"); requestInsecure {
-      httpClient.Transport = insecureTransport
-      formattedUrl.Scheme = "http"
-    }
-
-    fmt.Printf("initially requesting: %s\n", formattedUrl.String())
-    req, _ := http.NewRequest("GET", formattedUrl.String(), nil)
-    req.Close = true
-    requestStart := time.Now()
-    resp, respErr := httpClient.Do(req)
-    intialRequestTime := time.Now().Sub(requestStart)
-    fmt.Printf("request took: %s\n", intialRequestTime)
-    fmt.Printf("status: %s\n", resp.Status)
-    if respErr != nil {
-      return respErr
-    }
-
-    resourcesToResolve := getResourcesFromResponseBody(resp.Body)
-    fmt.Println("resolving resources...")
-    timings := make([]ResourceResult, 0)
-    timingCh := make(chan ResourceResult, 1)
-    resourceWg := new(sync.WaitGroup)
-    httpClient.CheckRedirect = nil
-    go func() {
-      for {
-        reqResult, isOpen := <- timingCh
-        if !isOpen { break }
-        timings = append(timings, reqResult)
-      }
-    }()
-    resourcesRequestStart := time.Now()
-    for _, resource := range resourcesToResolve {
-      resourceWg.Add(1)
-      go getResourceAsync(
-        fmt.Sprintf("%s%s", formattedUrl.String(), resource),
-        httpClient,
-        timingCh,
-        resourceWg,
-      )
-    }
-
-    resourceWg.Wait()
-    fmt.Printf("%4sfinished getting associated resources in %s\n", " ", time.Now().Sub(resourcesRequestStart))
-    close(timingCh)
-    var largestResourceRequestTime time.Duration
-    for _, t := range timings {
-      if t.Timing > largestResourceRequestTime {
-        largestResourceRequestTime = t.Timing
-      }
-    }
-
-    fmt.Printf("%4slongest associated resource request time: %s\n", " ", largestResourceRequestTime)
-    fmt.Printf("total request estimated at %s\n", intialRequestTime + largestResourceRequestTime)
-
-    if showHeaders, _ := cmd.Flags().GetBool("show-headers"); showHeaders {
-      showResponseHeaders(resp)
-    }
-
-    if analyzeTls, _ := cmd.Flags().GetBool("analyze-tls"); analyzeTls {
-      showResponseTlsInfo(resp)
-    }
-
-    if showResourceRequests, _ := cmd.Flags().GetBool("show-resource-requests"); showResourceRequests {
-      fmt.Println()
-      fmt.Println("resources parsed from initial request body:")
-      for _, t := range timings {
-        fmt.Printf("%5s %s %5d - %s\n", " ", t.Timing, t.RequestStatus, t.ResourceUrl)
-      }
-
-      fmt.Println()
-    }
-
-    return nil
-  },
-}
-var versionCmd = &cobra.Command{
-  Use: "version",
-  Short: "show the version",
-  Long: "...",
-  Run: func(cmd *cobra.Command, args []string) {
-    fmt.Printf("⏱  rtime - request timing and analysis\n   version: %s\n", ToolVersion)
-  },
 }
 
 func Execute() {
@@ -185,10 +44,10 @@ func init() {
   rootCmd.AddCommand(pageCmd)
   rootCmd.AddCommand(versionCmd)
 
-  rootCmd.PersistentFlags().BoolVarP(&Insecure, "insecure", "", false, "make insecure request(s); sans https")
-  rootCmd.PersistentFlags().BoolVarP(&AnalyzeTls, "analyze-tls", "", false, "show TLS information from response")
-  rootCmd.PersistentFlags().BoolVarP(&ShowHeaders, "show-headers", "", false, "show headers from final request")
-  pageCmd.Flags().BoolVarP(&ShowResourceRequests, "show-resource-requests", "", false, "show request responses for associated resources")
+  rootCmd.PersistentFlags().Bool("insecure", false, "make insecure request(s); sans https")
+  rootCmd.PersistentFlags().Bool("analyze-tls", false, "show TLS information from response")
+  rootCmd.PersistentFlags().Bool("show-headers", false, "show headers from final request")
+  pageCmd.Flags().Bool("show-resource-requests", false, "show request responses for associated resources")
 }
 
 func formatUrl(host string, secure bool) string {
