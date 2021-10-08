@@ -1,12 +1,10 @@
 package cmd
 import (
-  "crypto/tls"
   "fmt"
-  "net/http"
-  "net/url"
   "sync"
   "time"
 
+  "github.com/rdenson/rtime/resource"
   "github.com/spf13/cobra"
 )
 
@@ -17,66 +15,28 @@ var pageCmd = &cobra.Command{
   resources. eg. css, images, scripts, etc. Requests for additional
   resources are made concurrently.`,
   RunE: func(cmd *cobra.Command, args []string) error {
-    var (
-      insecureTransport *http.Transport = &http.Transport{
-        DisableCompression: true,
-        IdleConnTimeout: 30 * time.Second,
-        MaxIdleConns: 10,
-        TLSClientConfig: &tls.Config {
-          InsecureSkipVerify: true,
-        },
-      }
-      standardTransport *http.Transport = &http.Transport{
-        DisableCompression: true,
-        IdleConnTimeout: 30 * time.Second,
-        MaxIdleConns: 10,
-      }
-    )
-
-    httpClient := &http.Client{
-      CheckRedirect: func(req *http.Request, via []*http.Request) error {
-        fmt.Printf(
-          "%4sredirect! got %d, now requesting: %s\n",
-          " ",
-          req.Response.StatusCode, req.URL.String(),
-        )
-        //just return the initial response
-        // return http.ErrUseLastResponse
-        return nil
-      },
-      Timeout: 30 * time.Second,
-      Transport: standardTransport,
+    requestInsecure, _ := cmd.Flags().GetBool("insecure")
+    req, newRequestErr := resource.NewRequest(args[0], !requestInsecure)
+    if newRequestErr != nil {
+      return newRequestErr
     }
 
-    formattedUrl, urlParseErr := url.Parse(args[0])
-    if urlParseErr != nil {
-      return urlParseErr
+    req.SetRedirectsToPrint()
+    fmt.Printf("initially requesting: %s\n", req.Url)
+    resp, reqResult := req.Exec()
+    fmt.Printf("request took: %s\n", reqResult.Timing)
+    if reqResult.RequestErr != nil {
+      return reqResult.RequestErr
     }
 
-    formattedUrl.Scheme = "https"
-    if requestInsecure, _ := cmd.Flags().GetBool("insecure"); requestInsecure {
-      httpClient.Transport = insecureTransport
-      formattedUrl.Scheme = "http"
-    }
-
-    fmt.Printf("initially requesting: %s\n", formattedUrl.String())
-    req, _ := http.NewRequest("GET", formattedUrl.String(), nil)
-    req.Close = true
-    requestStart := time.Now()
-    resp, respErr := httpClient.Do(req)
-    intialRequestTime := time.Now().Sub(requestStart)
-    fmt.Printf("request took: %s\n", intialRequestTime)
     fmt.Printf("status: %s\n", resp.Status)
-    if respErr != nil {
-      return respErr
-    }
 
     resourcesToResolve := getResourcesFromResponseBody(resp.Body)
     fmt.Println("resolving resources...")
-    timings := make([]ResourceResult, 0)
-    timingCh := make(chan ResourceResult, 1)
+    timings := make([]resource.Result, 0)
+    timingCh := make(chan resource.Result, 1)
     resourceWg := new(sync.WaitGroup)
-    httpClient.CheckRedirect = nil
+    req.UnsetCheckRedirect()
     go func() {
       for {
         reqResult, isOpen := <- timingCh
@@ -84,12 +44,11 @@ var pageCmd = &cobra.Command{
         timings = append(timings, reqResult)
       }
     }()
-    resourcesRequestStart := time.Now()
-    for _, resource := range resourcesToResolve {
+    for _, resourcePath := range resourcesToResolve {
       resourceWg.Add(1)
-      go getResourceAsync(
-        fmt.Sprintf("%s%s", formattedUrl.String(), resource),
-        httpClient,
+      go resource.ExecAsync(
+        fmt.Sprintf("%s%s", req.Url, resourcePath),
+        req.GetClient(),
         timingCh,
         resourceWg,
       )
@@ -97,10 +56,9 @@ var pageCmd = &cobra.Command{
 
     resourceWg.Wait()
     fmt.Printf(
-      "%4sfinished requesting %d resource(s) in %s\n",
+      "%4sfinished requesting %d resource(s)\n",
       " ",
       len(timings),
-      time.Now().Sub(resourcesRequestStart),
     )
     close(timingCh)
     var largestResourceRequestTime time.Duration
@@ -111,7 +69,7 @@ var pageCmd = &cobra.Command{
     }
 
     fmt.Printf("%4slongest associated resource request time: %s\n", " ", largestResourceRequestTime)
-    fmt.Printf("total request estimated at %s\n", intialRequestTime + largestResourceRequestTime)
+    fmt.Printf("total request estimated at %s\n", reqResult.Timing + largestResourceRequestTime)
 
     if showHeaders, _ := cmd.Flags().GetBool("show-headers"); showHeaders {
       showResponseHeaders(resp)
@@ -121,7 +79,7 @@ var pageCmd = &cobra.Command{
       showResponseTlsInfo(resp)
     }
 
-    if showResourceRequests, _ := cmd.Flags().GetBool("show-resource-requests"); showResourceRequests {
+    if showResourceRequests, _ := cmd.Flags().GetBool("show-resources-requested"); showResourceRequests {
       fmt.Println()
       fmt.Println("resources parsed from initial request body:")
       for _, t := range timings {
