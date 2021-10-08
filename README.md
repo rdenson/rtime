@@ -17,4 +17,21 @@ request:
 * additional resources requested (_see path 1 above_)
 
 ### Notes
-This tool is written to be a diagnostic and is still being developed.
+This code is written to be a diagnostic tool and is still being developed.
+
+### Command Completion
+An example of how to take advantage of the command completion for this program.
+rtime uses cobra, more examples specific to your shell can be found 👉  [here](https://github.com/spf13/cobra/blob/master/shell_completions.md).
+```sh
+# on mac os + zsh
+# assuming download from releases
+cd ~/Downloads/rtime_<tag>_os_arch/
+cp rtime /usr/local/bin/
+# set up command completion
+# see https://github.com/spf13/cobra/blob/master/shell_completions.md (zsh section)
+./rtime completion zsh > _rtime
+cp _rtime ~/.zsh/functions
+
+# path above used because in my .zshrc:
+fpath=(~/.zsh/functions $fpath)
+```
