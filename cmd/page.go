@@ -34,8 +34,8 @@ var pageCmd = &cobra.Command{
 
 		resourcesToResolve := getResourcesFromResponseBody(resp.Body)
 		fmt.Println("resolving resources...")
-		timings := make([]resource.Result, 0)
-		timingCh := make(chan resource.Result, 1)
+		timings := make([]*resource.Result, 0)
+		timingCh := make(chan *resource.Result, 1)
 		resourceWg := new(sync.WaitGroup)
 		req.UnsetCheckRedirect()
 		go func() {
@@ -49,9 +49,8 @@ var pageCmd = &cobra.Command{
 		}()
 		for _, resourcePath := range resourcesToResolve {
 			resourceWg.Add(1)
-			go resource.ExecAsync(
+			go req.ExecAsync(
 				fmt.Sprintf("%s%s", req.Url, resourcePath),
-				req.GetClient(),
 				timingCh,
 				resourceWg,
 			)

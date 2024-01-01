@@ -9,13 +9,13 @@ import (
 	"time"
 )
 
-const defaultRequestTimeout time.Duration = 30 * time.Second
+const defaultTimeout time.Duration = 30 * time.Second
 
 var (
-	RequestTimeout    time.Duration   = defaultRequestTimeout
+	RequestTimeout    time.Duration   = defaultTimeout
 	insecureTransport *http.Transport = &http.Transport{
 		DisableCompression: true,
-		IdleConnTimeout:    30 * time.Second,
+		IdleConnTimeout:    defaultTimeout,
 		MaxIdleConns:       10,
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
@@ -23,26 +23,28 @@ var (
 	}
 	standardTransport *http.Transport = &http.Transport{
 		DisableCompression: true,
-		IdleConnTimeout:    30 * time.Second,
+		IdleConnTimeout:    defaultTimeout,
 		MaxIdleConns:       10,
 	}
 )
 
+type Requester interface {
+	Do(req *http.Request) (*http.Response, error)
+}
 type Request struct {
 	Url     string
-	client  *http.Client
+	client  Requester
 	httpreq *http.Request
 }
 
-func (r *Request) Exec() (*http.Response, Result) {
+func (r *Request) Exec() (*http.Response, *Result) {
 	requestStart := time.Now()
 	response, doErr := r.client.Do(r.httpreq)
-	requestEnd := time.Now().Sub(requestStart)
 
-	reqResult := Result{
+	reqResult := &Result{
 		RequestErr:  doErr,
 		ResourceUrl: r.Url,
-		Timing:      requestEnd,
+		Timing:      time.Since(requestStart),
 	}
 	if doErr == nil {
 		reqResult.RequestStatus = response.StatusCode
@@ -51,12 +53,37 @@ func (r *Request) Exec() (*http.Response, Result) {
 	return response, reqResult
 }
 
-func (r *Request) GetClient() *http.Client {
+func (r *Request) ExecAsync(target string, ch chan *Result, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	req, newRequestErr := http.NewRequest("GET", target, nil)
+	if newRequestErr != nil {
+		// short circuit; incorrectly formated http.Request{}
+		ch <- &Result{RequestErr: newRequestErr}
+		return
+	}
+
+	req.Close = true
+	requestStart := time.Now()
+	resp, respErr := r.client.Do(req)
+	currentResult := &Result{
+		RequestErr:  respErr,
+		ResourceUrl: target,
+		Timing:      time.Since(requestStart),
+	}
+	if respErr == nil {
+		currentResult.RequestStatus = resp.StatusCode
+	}
+
+	ch <- currentResult
+}
+
+func (r *Request) GetClient() Requester {
 	return r.client
 }
 
 func (r *Request) SetRedirectsToPrint() {
-	r.client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+	r.client.(*http.Client).CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		fmt.Printf(
 			"%4sredirect! got %d, now requesting: %s\n",
 			" ",
@@ -68,32 +95,7 @@ func (r *Request) SetRedirectsToPrint() {
 }
 
 func (r *Request) UnsetCheckRedirect() {
-	r.client.CheckRedirect = nil
-}
-
-func ExecAsync(target string, hc *http.Client, ch chan Result, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	req, newRequestErr := http.NewRequest("GET", target, nil)
-	if newRequestErr != nil {
-		// short circuit; incorrectly formated http.Request{}
-		ch <- Result{RequestErr: newRequestErr}
-		return
-	}
-
-	req.Close = true
-	requestStart := time.Now()
-	resp, respErr := hc.Do(req)
-	currentResult := Result{
-		RequestErr:  respErr,
-		ResourceUrl: target,
-		Timing:      time.Now().Sub(requestStart),
-	}
-	if respErr == nil {
-		currentResult.RequestStatus = resp.StatusCode
-	}
-
-	ch <- currentResult
+	r.client.(*http.Client).CheckRedirect = nil
 }
 
 func NewRequest(target string, isSecure bool) (*Request, error) {
@@ -111,7 +113,7 @@ func NewRequest(target string, isSecure bool) (*Request, error) {
 
 	formattedUrl.Scheme = "https"
 	if !isSecure {
-		r.client.Transport = insecureTransport
+		r.client.(*http.Client).Transport = insecureTransport
 		formattedUrl.Scheme = "http"
 	}
 

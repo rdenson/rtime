@@ -12,8 +12,8 @@ type Result struct {
 	Timing        time.Duration
 }
 
-func (rr Result) PrettyPrint() {
-	if rr.RequestErr != nil {
+func (rr *Result) PrettyPrint() {
+	if rr.RequestErr == nil {
 		fmt.Printf(
 			"%5s %s %6d - %s\n", " ",
 			rr.Timing,
@@ -23,4 +23,8 @@ func (rr Result) PrettyPrint() {
 	} else {
 		fmt.Printf("%+v\n", rr.RequestErr)
 	}
+}
+
+func (rr *Result) SetTiming(d time.Duration) {
+	rr.Timing = d
 }
