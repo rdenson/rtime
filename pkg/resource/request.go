@@ -5,26 +5,28 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"sync"
 	"time"
 )
 
 const defaultTimeout time.Duration = 30 * time.Second
+const schemeSecure string = "https"
 
 var (
 	RequestTimeout    time.Duration   = defaultTimeout
 	insecureTransport *http.Transport = &http.Transport{
 		DisableCompression: true,
+		DisableKeepAlives:  true,
 		IdleConnTimeout:    defaultTimeout,
-		MaxIdleConns:       10,
+		MaxIdleConns:       1,
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
 	}
 	standardTransport *http.Transport = &http.Transport{
 		DisableCompression: true,
+		DisableKeepAlives:  true,
 		IdleConnTimeout:    defaultTimeout,
-		MaxIdleConns:       10,
+		MaxIdleConns:       1,
 	}
 )
 
@@ -32,7 +34,6 @@ type Requester interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 type Request struct {
-	Url     string
 	client  Requester
 	httpreq *http.Request
 }
@@ -43,7 +44,7 @@ func (r *Request) Exec() (*http.Response, *Result) {
 
 	reqResult := &Result{
 		RequestErr:  doErr,
-		ResourceUrl: r.Url,
+		ResourceUrl: r.httpreq.URL.String(),
 		Timing:      time.Since(requestStart),
 	}
 	if doErr == nil {
@@ -53,22 +54,13 @@ func (r *Request) Exec() (*http.Response, *Result) {
 	return response, reqResult
 }
 
-func (r *Request) ExecAsync(target string, ch chan *Result, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	req, newRequestErr := http.NewRequest("GET", target, nil)
-	if newRequestErr != nil {
-		// short circuit; incorrectly formated http.Request{}
-		ch <- &Result{RequestErr: newRequestErr}
-		return
-	}
-
-	req.Close = true
+func (r *Request) ExecAsync(ch chan *Result) {
 	requestStart := time.Now()
-	resp, respErr := r.client.Do(req)
+	resp, respErr := r.client.Do(r.httpreq)
+
 	currentResult := &Result{
 		RequestErr:  respErr,
-		ResourceUrl: target,
+		ResourceUrl: r.httpreq.URL.String(),
 		Timing:      time.Since(requestStart),
 	}
 	if respErr == nil {
@@ -98,7 +90,7 @@ func (r *Request) UnsetCheckRedirect() {
 	r.client.(*http.Client).CheckRedirect = nil
 }
 
-func NewRequest(target string, isSecure bool) (*Request, error) {
+func NewRequest(target string) (*Request, error) {
 	r := &Request{
 		client: &http.Client{
 			Timeout:   RequestTimeout,
@@ -111,19 +103,15 @@ func NewRequest(target string, isSecure bool) (*Request, error) {
 		return nil, urlParseErr
 	}
 
-	formattedUrl.Scheme = "https"
-	if !isSecure {
+	if formattedUrl.Scheme != schemeSecure {
 		r.client.(*http.Client).Transport = insecureTransport
-		formattedUrl.Scheme = "http"
 	}
 
-	r.Url = formattedUrl.String()
-	req, newRequestErr := http.NewRequest("GET", r.Url, nil)
+	req, newRequestErr := http.NewRequest(http.MethodGet, formattedUrl.String(), nil)
 	if newRequestErr != nil {
 		return nil, newRequestErr
 	}
 
-	req.Close = true
 	r.httpreq = req
 
 	return r, nil

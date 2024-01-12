@@ -13,14 +13,13 @@ var endpointCmd = &cobra.Command{
 	Long: `Attempts to request the specified URL. Does not inspect the response
   body.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		requestInsecure, _ := cmd.Flags().GetBool("insecure")
-		req, newRequestErr := resource.NewRequest(args[0], !requestInsecure)
+		req, newRequestErr := resource.NewRequest(args[0])
 		if newRequestErr != nil {
 			return newRequestErr
 		}
 
 		req.SetRedirectsToPrint()
-		fmt.Printf("initially requesting: %s\n", req.Url)
+		// fmt.Printf("initially requesting: %s\n", req.Url)
 		resp, reqResult := req.Exec()
 		fmt.Printf("request took: %s\n", reqResult.Timing)
 		if reqResult.RequestErr != nil {

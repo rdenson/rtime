@@ -35,7 +35,6 @@ func init() {
 	rootCmd.AddCommand(pageCmd)
 	rootCmd.AddCommand(versionCmd)
 
-	rootCmd.PersistentFlags().Bool("insecure", false, "make insecure request(s); sans https")
 	rootCmd.PersistentFlags().Bool("analyze-tls", false, "show TLS information from response")
 	rootCmd.PersistentFlags().Bool("show-headers", false, "show headers from final request")
 	pageCmd.Flags().Bool("show-resources-requested", false, "show request responses for associated resources")

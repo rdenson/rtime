@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sync"
 	"testing"
 
@@ -56,13 +57,17 @@ func (rtc *requestTestCase) getRequest() (*Request, error) {
 		},
 		rtc.requestErr,
 	)
-	r := &Request{
-		Url:     rtc.url,
-		client:  fhc,
-		httpreq: nil,
+	parsedUrl, err := url.Parse(rtc.url)
+	if err != nil {
+		return nil, err
 	}
 
-	req, err := http.NewRequest("GET", r.Url, nil)
+	r := &Request{
+		// Url:    parsedUrl,
+		client: fhc,
+	}
+
+	req, err := http.NewRequest(http.MethodGet, parsedUrl.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -129,6 +134,15 @@ func (suite *requestTestSuite) TestExec() {
 				ResourceUrl:   fixtureUrl,
 			},
 		},
+		// {
+		// 	name:         "foo",
+		// 	url:          fixtureUrl,
+		// 	responseCode: http.StatusOK,
+		// 	expects: &Result{
+		// 		RequestStatus: http.StatusOK,
+		// 		ResourceUrl:   fixtureUrl,
+		// 	},
+		// },
 	}
 
 	for _, scenario := range testCases {
@@ -156,6 +170,10 @@ func (suite *requestTestSuite) TestExecAsync() {
 	tc := requestTestCase{
 		url:          fixtureUrl,
 		responseCode: http.StatusOK,
+		expects: &Result{
+			ResourceUrl:   fixtureUrl,
+			RequestStatus: http.StatusOK,
+		},
 	}
 
 	r, err := tc.getRequest()
@@ -165,9 +183,10 @@ func (suite *requestTestSuite) TestExecAsync() {
 	}
 
 	c := make(chan *Result, 1)
+	dc := make(chan bool, 1)
 	w := new(sync.WaitGroup)
 
-	go func(t *testing.T, ch chan *Result) {
+	go func(t *testing.T, ch chan *Result, wg *sync.WaitGroup) {
 		t.Log("listening for request results...")
 		for {
 			data, isOpen := <-ch
@@ -175,14 +194,20 @@ func (suite *requestTestSuite) TestExecAsync() {
 				break
 			}
 
+			wg.Done()
 			t.Logf("received: %+v", data)
+			tc.expects.(*Result).SetTiming(data.Timing)
+			suite.Equal(tc.expects, data)
+			dc <- true
 		}
-	}(suite.T(), c)
+	}(suite.T(), c, w)
 
 	w.Add(1)
-	r.ExecAsync(tc.url, c, w)
+	suite.T().Log("making asynchronous request")
+	r.ExecAsync(c)
 	w.Wait()
 	close(c)
 
+	<-dc
 	suite.T().Log("done waiting")
 }

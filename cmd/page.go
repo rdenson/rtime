@@ -16,14 +16,13 @@ var pageCmd = &cobra.Command{
   resources. eg. css, images, scripts, etc. Requests for additional
   resources are made concurrently.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		requestInsecure, _ := cmd.Flags().GetBool("insecure")
-		req, newRequestErr := resource.NewRequest(args[0], !requestInsecure)
+		req, newRequestErr := resource.NewRequest(args[0])
 		if newRequestErr != nil {
 			return newRequestErr
 		}
 
 		req.SetRedirectsToPrint()
-		fmt.Printf("initially requesting: %s\n", req.Url)
+		// fmt.Printf("initially requesting: %s\n", req.Url)
 		resp, reqResult := req.Exec()
 		fmt.Printf("request took: %s\n", reqResult.Timing)
 		if reqResult.RequestErr != nil {
@@ -38,21 +37,23 @@ var pageCmd = &cobra.Command{
 		timingCh := make(chan *resource.Result, 1)
 		resourceWg := new(sync.WaitGroup)
 		req.UnsetCheckRedirect()
-		go func() {
+		go func(wg *sync.WaitGroup) {
 			for {
 				reqResult, isOpen := <-timingCh
 				if !isOpen {
 					break
 				}
+
+				wg.Done()
 				timings = append(timings, reqResult)
 			}
-		}()
+		}(resourceWg)
 		for _, resourcePath := range resourcesToResolve {
 			resourceWg.Add(1)
+			fmt.Printf(">>> requesting %s\n", resourcePath)
 			go req.ExecAsync(
-				fmt.Sprintf("%s%s", req.Url, resourcePath),
 				timingCh,
-				resourceWg,
+				// resourceWg,
 			)
 		}
 
