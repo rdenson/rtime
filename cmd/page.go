@@ -16,7 +16,7 @@ var pageCmd = &cobra.Command{
   resources. eg. css, images, scripts, etc. Requests for additional
   resources are made concurrently.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		req, newRequestErr := resource.NewRequest(args[0])
+		req, newRequestErr := resource.NewRequest(resource.OptionRequestUrl(args[0]))
 		if newRequestErr != nil {
 			return newRequestErr
 		}

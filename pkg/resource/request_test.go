@@ -115,7 +115,7 @@ func TestRequest(t *testing.T) {
 }
 
 func (suite *requestTestSuite) TestFoo() {
-	r, err := _NewRequest(
+	r, err := NewRequest(
 		OptionRequestClient(
 			fakeHttpClient(
 				"some body content",
@@ -138,7 +138,7 @@ func (suite *requestTestSuite) TestFoo() {
 }
 
 func (suite *requestTestSuite) TestBar() {
-	r, err := _NewRequest()
+	r, err := NewRequest()
 	suite.Nil(err)
 	suite.T().Logf("%+v", r)
 
@@ -148,7 +148,7 @@ func (suite *requestTestSuite) TestBar() {
 }
 
 func (suite *requestTestSuite) TestReal() {
-	r, err := _NewRequest(OptionRequestUrl("https://www.google.com"))
+	r, err := NewRequest(OptionRequestUrl("https://www.google.com"))
 	suite.Nil(err)
 	suite.T().Logf("%+v", r)
 

@@ -20,7 +20,7 @@ var standardTransport *http.Transport = &http.Transport{
 	IdleConnTimeout:    1 * time.Second,
 	MaxIdleConns:       1,
 }
-var ErrNoHttpRequestSet error = errors.New("Request.httpreq not set, check request url")
+var ErrNoHttpRequestSet error = errors.New("request.httpreq not set, check request url")
 
 type Requester interface {
 	Do(req *http.Request) (*http.Response, error)
@@ -104,23 +104,7 @@ func (r *Request) UsesHttpClient() bool {
 	return reflect.TypeOf(r.client).String() == "*http.Client"
 }
 
-func NewRequest(u string) (*Request, error) {
-	r := &Request{
-		chResult: make(chan *Result, 1),
-		client: &http.Client{
-			Timeout:   defaultTimeout,
-			Transport: standardTransport,
-		},
-	}
-
-	if err := r.SetupGet(u); err != nil {
-		return nil, err
-	}
-
-	return r, nil
-}
-
-func _NewRequest(options ...requestOption) (*Request, error) {
+func NewRequest(options ...requestOption) (*Request, error) {
 	r := &Request{
 		chResult: make(chan *Result, 1),
 		client: &http.Client{

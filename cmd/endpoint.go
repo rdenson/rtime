@@ -13,7 +13,7 @@ var endpointCmd = &cobra.Command{
 	Long: `Attempts to request the specified URL. Does not inspect the response
   body.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		req, newRequestErr := resource.NewRequest(args[0])
+		req, newRequestErr := resource.NewRequest(resource.OptionRequestUrl(args[0]))
 		if newRequestErr != nil {
 			return newRequestErr
 		}
