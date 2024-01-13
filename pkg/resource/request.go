@@ -41,7 +41,6 @@ func (r *Request) Exec() *Result {
 
 	requestStart := time.Now()
 	resp, err := r.client.Do(r.httpreq)
-
 	reqResult := &Result{
 		Err:          err,
 		RequestedUrl: r.httpreq.URL.String(),
