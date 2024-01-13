@@ -26,7 +26,7 @@ var endpointCmd = &cobra.Command{
 			return reqResult.Err
 		}
 
-		fmt.Printf("status: %s\n", reqResult.Status)
+		fmt.Printf("status: %d\n", reqResult.Status)
 		if showHeaders, _ := cmd.Flags().GetBool("show-headers"); showHeaders {
 			showResponseHeaders(reqResult.Response)
 		}

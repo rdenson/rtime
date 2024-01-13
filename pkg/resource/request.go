@@ -14,53 +14,16 @@ import (
 const defaultTimeout time.Duration = 30 * time.Second
 const schemeSecure string = "https"
 
-var (
-	standardTransport *http.Transport = &http.Transport{
-		DisableCompression: true,
-		DisableKeepAlives:  true,
-		IdleConnTimeout:    1 * time.Second,
-		MaxIdleConns:       1,
-	}
-)
+var standardTransport *http.Transport = &http.Transport{
+	DisableCompression: true,
+	DisableKeepAlives:  true,
+	IdleConnTimeout:    1 * time.Second,
+	MaxIdleConns:       1,
+}
 var ErrNoHttpRequestSet error = errors.New("Request.httpreq not set, check request url")
 
 type Requester interface {
 	Do(req *http.Request) (*http.Response, error)
-}
-
-type requestOption interface {
-	ApplyOption(*Request)
-}
-type (
-	optRequestClient struct {
-		Requester
-	}
-	optRequestTimeout string
-	optRequestUrl     string
-)
-
-func (c optRequestClient) ApplyOption(r *Request) {
-	r.client = c.Requester
-}
-func (t optRequestTimeout) ApplyOption(r *Request) {
-	parsedTimeout, err := time.ParseDuration(string(t))
-	if err != nil {
-		panic(err)
-	}
-
-	r.timeout = parsedTimeout
-}
-func (u optRequestUrl) ApplyOption(r *Request) {
-	r.url = string(u)
-}
-func OptionRequestClient(r Requester) requestOption {
-	return optRequestClient{r}
-}
-func OptionRequestTimeout(d string) requestOption {
-	return optRequestTimeout(d)
-}
-func OptionRequestUrl(url string) requestOption {
-	return optRequestUrl(url)
 }
 
 type Request struct {

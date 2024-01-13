@@ -29,7 +29,7 @@ var pageCmd = &cobra.Command{
 			return reqResult.Err
 		}
 
-		fmt.Printf("status: %s\n", reqResult.Status)
+		fmt.Printf("status: %d\n", reqResult.Status)
 
 		resourcesToResolve := getResourcesFromResponseBody(reqResult.Response.Body)
 		fmt.Println("resolving resources...")
