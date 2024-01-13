@@ -23,15 +23,15 @@ var pageCmd = &cobra.Command{
 
 		req.SetRedirectsToPrint()
 		// fmt.Printf("initially requesting: %s\n", req.Url)
-		resp, reqResult := req.Exec()
+		reqResult := req.Exec()
 		fmt.Printf("request took: %s\n", reqResult.Timing)
-		if reqResult.RequestErr != nil {
-			return reqResult.RequestErr
+		if reqResult.Err != nil {
+			return reqResult.Err
 		}
 
-		fmt.Printf("status: %s\n", resp.Status)
+		fmt.Printf("status: %s\n", reqResult.Status)
 
-		resourcesToResolve := getResourcesFromResponseBody(resp.Body)
+		resourcesToResolve := getResourcesFromResponseBody(reqResult.Response.Body)
 		fmt.Println("resolving resources...")
 		timings := make([]*resource.Result, 0)
 		timingCh := make(chan *resource.Result, 1)
@@ -75,18 +75,19 @@ var pageCmd = &cobra.Command{
 		fmt.Printf("total request estimated at %s\n", reqResult.Timing+largestResourceRequestTime)
 
 		if showHeaders, _ := cmd.Flags().GetBool("show-headers"); showHeaders {
-			showResponseHeaders(resp)
+			showResponseHeaders(reqResult.Response)
 		}
 
 		if analyzeTls, _ := cmd.Flags().GetBool("analyze-tls"); analyzeTls {
-			showResponseTlsInfo(resp)
+			showResponseTlsInfo(reqResult.Response)
 		}
 
 		if showResourceRequests, _ := cmd.Flags().GetBool("show-resources-requested"); showResourceRequests {
 			fmt.Println()
 			fmt.Println("resources parsed from initial request body:")
 			for _, t := range timings {
-				fmt.Printf("%5s %s %5d - %s\n", " ", t.Timing, t.RequestStatus, t.ResourceUrl)
+				// fmt.Printf("%5s %s %5d - %s\n", " ", t.Timing, t.RequestStatus, t.ResourceUrl)
+				t.PrettyPrint()
 			}
 
 			fmt.Println()

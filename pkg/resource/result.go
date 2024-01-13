@@ -2,26 +2,34 @@ package resource
 
 import (
 	"fmt"
+	"net/http"
 	"time"
 )
 
 type Result struct {
-	RequestErr    error
-	RequestStatus int
-	ResourceUrl   string
-	Timing        time.Duration
+	Err          error
+	RequestedUrl string
+	Response     *http.Response
+	Status       int
+	Timing       time.Duration
 }
 
 func (rr *Result) PrettyPrint() {
-	if rr.RequestErr == nil {
+	if rr.Err == nil {
 		fmt.Printf(
 			"%5s %s %6d - %s\n", " ",
 			rr.Timing,
-			rr.RequestStatus,
-			rr.ResourceUrl,
+			rr.Status,
+			rr.RequestedUrl,
 		)
 	} else {
-		fmt.Printf("%+v\n", rr.RequestErr)
+		fmt.Printf("%+v\n", rr.Err)
+	}
+}
+
+func (rr *Result) SetStatusFromResponse() {
+	if rr.Err == nil {
+		rr.Status = rr.Response.StatusCode
 	}
 }
 

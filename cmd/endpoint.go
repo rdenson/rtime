@@ -20,19 +20,19 @@ var endpointCmd = &cobra.Command{
 
 		req.SetRedirectsToPrint()
 		// fmt.Printf("initially requesting: %s\n", req.Url)
-		resp, reqResult := req.Exec()
+		reqResult := req.Exec()
 		fmt.Printf("request took: %s\n", reqResult.Timing)
-		if reqResult.RequestErr != nil {
-			return reqResult.RequestErr
+		if reqResult.Err != nil {
+			return reqResult.Err
 		}
 
-		fmt.Printf("status: %s\n", resp.Status)
+		fmt.Printf("status: %s\n", reqResult.Status)
 		if showHeaders, _ := cmd.Flags().GetBool("show-headers"); showHeaders {
-			showResponseHeaders(resp)
+			showResponseHeaders(reqResult.Response)
 		}
 
 		if analyzeTls, _ := cmd.Flags().GetBool("analyze-tls"); analyzeTls {
-			showResponseTlsInfo(resp)
+			showResponseTlsInfo(reqResult.Response)
 		}
 
 		return nil

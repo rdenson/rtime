@@ -114,6 +114,55 @@ func TestRequest(t *testing.T) {
 	suite.Run(t, new(requestTestSuite))
 }
 
+func (suite *requestTestSuite) TestFoo() {
+	r, err := _NewRequest(
+		OptionRequestClient(
+			fakeHttpClient(
+				"some body content",
+				http.StatusTeapot,
+				http.Header{
+					"Content-Type": []string{"text/html", "charset=utf-8"},
+				},
+				nil,
+			),
+		),
+		OptionRequestUrl(fixtureUrl),
+	)
+
+	suite.Nil(err)
+	suite.T().Logf("%+v", r)
+	res := r.Exec()
+	suite.T().Logf("result: %+v", res)
+
+	suite.Equal(http.StatusTeapot, res.Status)
+}
+
+func (suite *requestTestSuite) TestBar() {
+	r, err := _NewRequest()
+	suite.Nil(err)
+	suite.T().Logf("%+v", r)
+
+	res := r.Exec()
+	suite.T().Logf("result: %+v", res)
+	suite.Nil(res.Err)
+}
+
+func (suite *requestTestSuite) TestReal() {
+	r, err := _NewRequest(OptionRequestUrl("https://www.google.com"))
+	suite.Nil(err)
+	suite.T().Logf("%+v", r)
+
+	res := r.Exec()
+	suite.T().Logf("result: %+v", res)
+
+	err = r.SetupGet("https://www.arstechnica.com")
+	suite.Nil(err)
+	res = r.Exec()
+	suite.T().Logf("result: %+v", res)
+
+	suite.True(true)
+}
+
 func (suite *requestTestSuite) TestExec() {
 	testCases := []requestTestCase{
 		{
@@ -121,8 +170,8 @@ func (suite *requestTestSuite) TestExec() {
 			url:        fixtureUrl,
 			requestErr: errHttpClientDo,
 			expects: &Result{
-				RequestErr:  errHttpClientDo,
-				ResourceUrl: fixtureUrl,
+				Err:          errHttpClientDo,
+				RequestedUrl: fixtureUrl,
 			},
 		},
 		{
@@ -130,8 +179,8 @@ func (suite *requestTestSuite) TestExec() {
 			url:          fixtureUrl,
 			responseCode: http.StatusOK,
 			expects: &Result{
-				RequestStatus: http.StatusOK,
-				ResourceUrl:   fixtureUrl,
+				Status:       http.StatusOK,
+				RequestedUrl: fixtureUrl,
 			},
 		},
 		// {
@@ -153,14 +202,14 @@ func (suite *requestTestSuite) TestExec() {
 				return
 			}
 
-			_, res := r.Exec()
+			res := r.Exec()
 
 			// shim to help with scenario.expects an result equality comparison
 			scenario.expects.(*Result).SetTiming(res.Timing)
 
 			// vet Result
 			suite.Equal(1, len(r.GetClient().(*httpClientMock).requestsReceived))
-			suite.Equal(scenario.requestErr, res.RequestErr)
+			suite.Equal(scenario.requestErr, res.Err)
 			suite.Equal(scenario.expects, res)
 		})
 	}
@@ -171,8 +220,8 @@ func (suite *requestTestSuite) TestExecAsync() {
 		url:          fixtureUrl,
 		responseCode: http.StatusOK,
 		expects: &Result{
-			ResourceUrl:   fixtureUrl,
-			RequestStatus: http.StatusOK,
+			RequestedUrl: fixtureUrl,
+			Status:       http.StatusOK,
 		},
 	}
 

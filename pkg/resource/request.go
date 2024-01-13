@@ -2,9 +2,12 @@ package resource
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"reflect"
+	"strings"
 	"time"
 )
 
@@ -12,62 +15,83 @@ const defaultTimeout time.Duration = 30 * time.Second
 const schemeSecure string = "https"
 
 var (
-	RequestTimeout    time.Duration   = defaultTimeout
-	insecureTransport *http.Transport = &http.Transport{
-		DisableCompression: true,
-		DisableKeepAlives:  true,
-		IdleConnTimeout:    defaultTimeout,
-		MaxIdleConns:       1,
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
-	}
 	standardTransport *http.Transport = &http.Transport{
 		DisableCompression: true,
 		DisableKeepAlives:  true,
-		IdleConnTimeout:    defaultTimeout,
+		IdleConnTimeout:    1 * time.Second,
 		MaxIdleConns:       1,
 	}
 )
+var ErrNoHttpRequestSet error = errors.New("Request.httpreq not set, check request url")
 
 type Requester interface {
 	Do(req *http.Request) (*http.Response, error)
 }
-type Request struct {
-	client  Requester
-	httpreq *http.Request
+
+type requestOption interface {
+	ApplyOption(*Request)
+}
+type (
+	optRequestClient struct {
+		Requester
+	}
+	optRequestTimeout string
+	optRequestUrl     string
+)
+
+func (c optRequestClient) ApplyOption(r *Request) {
+	r.client = c.Requester
+}
+func (t optRequestTimeout) ApplyOption(r *Request) {
+	parsedTimeout, err := time.ParseDuration(string(t))
+	if err != nil {
+		panic(err)
+	}
+
+	r.timeout = parsedTimeout
+}
+func (u optRequestUrl) ApplyOption(r *Request) {
+	r.url = string(u)
+}
+func OptionRequestClient(r Requester) requestOption {
+	return optRequestClient{r}
+}
+func OptionRequestTimeout(d string) requestOption {
+	return optRequestTimeout(d)
+}
+func OptionRequestUrl(url string) requestOption {
+	return optRequestUrl(url)
 }
 
-func (r *Request) Exec() (*http.Response, *Result) {
+type Request struct {
+	chResult chan *Result
+	client   Requester
+	httpreq  *http.Request
+	timeout  time.Duration
+	url      string
+}
+
+func (r *Request) Exec() *Result {
+	if r.httpreq == nil {
+		return &Result{Err: ErrNoHttpRequestSet}
+	}
+
 	requestStart := time.Now()
-	response, doErr := r.client.Do(r.httpreq)
+	resp, err := r.client.Do(r.httpreq)
 
 	reqResult := &Result{
-		RequestErr:  doErr,
-		ResourceUrl: r.httpreq.URL.String(),
-		Timing:      time.Since(requestStart),
+		Err:          err,
+		RequestedUrl: r.httpreq.URL.String(),
+		Response:     resp,
+		Timing:       time.Since(requestStart),
 	}
-	if doErr == nil {
-		reqResult.RequestStatus = response.StatusCode
-	}
+	reqResult.SetStatusFromResponse()
 
-	return response, reqResult
+	return reqResult
 }
 
 func (r *Request) ExecAsync(ch chan *Result) {
-	requestStart := time.Now()
-	resp, respErr := r.client.Do(r.httpreq)
-
-	currentResult := &Result{
-		RequestErr:  respErr,
-		ResourceUrl: r.httpreq.URL.String(),
-		Timing:      time.Since(requestStart),
-	}
-	if respErr == nil {
-		currentResult.RequestStatus = resp.StatusCode
-	}
-
-	ch <- currentResult
+	ch <- r.Exec()
 }
 
 func (r *Request) GetClient() Requester {
@@ -86,33 +110,76 @@ func (r *Request) SetRedirectsToPrint() {
 	}
 }
 
+func (r *Request) SetupGet(u string) error {
+	r.url = u
+	formattedUrl, err := url.Parse(r.url)
+	if err != nil {
+		return err
+	}
+
+	if r.UsesHttpClient() && formattedUrl.Scheme != schemeSecure {
+		r.client.(*http.Client).Transport.(*http.Transport).TLSClientConfig = &tls.Config{
+			InsecureSkipVerify: true,
+		}
+	}
+
+	req, err := http.NewRequest(http.MethodGet, formattedUrl.String(), nil)
+	if err != nil {
+		return err
+	}
+
+	r.httpreq = req
+
+	return nil
+}
+
 func (r *Request) UnsetCheckRedirect() {
 	r.client.(*http.Client).CheckRedirect = nil
 }
 
-func NewRequest(target string) (*Request, error) {
+func (r *Request) UsesHttpClient() bool {
+	return reflect.TypeOf(r.client).String() == "*http.Client"
+}
+
+func NewRequest(u string) (*Request, error) {
 	r := &Request{
+		chResult: make(chan *Result, 1),
 		client: &http.Client{
-			Timeout:   RequestTimeout,
+			Timeout:   defaultTimeout,
 			Transport: standardTransport,
 		},
 	}
 
-	formattedUrl, urlParseErr := url.Parse(target)
-	if urlParseErr != nil {
-		return nil, urlParseErr
+	if err := r.SetupGet(u); err != nil {
+		return nil, err
 	}
 
-	if formattedUrl.Scheme != schemeSecure {
-		r.client.(*http.Client).Transport = insecureTransport
+	return r, nil
+}
+
+func _NewRequest(options ...requestOption) (*Request, error) {
+	r := &Request{
+		chResult: make(chan *Result, 1),
+		client: &http.Client{
+			Timeout:   defaultTimeout,
+			Transport: standardTransport,
+		},
+		timeout: defaultTimeout,
 	}
 
-	req, newRequestErr := http.NewRequest(http.MethodGet, formattedUrl.String(), nil)
-	if newRequestErr != nil {
-		return nil, newRequestErr
+	for _, o := range options {
+		o.ApplyOption(r)
 	}
 
-	r.httpreq = req
+	if r.UsesHttpClient() && r.timeout != defaultTimeout {
+		r.client.(*http.Client).Timeout = r.timeout
+	}
+
+	if len(strings.TrimSpace(r.url)) > 0 {
+		if err := r.SetupGet(r.url); err != nil {
+			return nil, err
+		}
+	}
 
 	return r, nil
 }
