@@ -17,10 +17,10 @@ type Result struct {
 func (rr *Result) PrettyPrint() {
 	if rr.Err == nil {
 		fmt.Printf(
-			"%5s %s %6d - %s\n", " ",
+			"%3s %s %6d - %s\n", " ",
 			rr.Timing,
 			rr.Status,
-			rr.RequestedUrl,
+			rr.Response.Request.URL.String(),
 		)
 	} else {
 		fmt.Printf("%+v\n", rr.Err)

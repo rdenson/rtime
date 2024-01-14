@@ -19,9 +19,8 @@ var endpointCmd = &cobra.Command{
 		}
 
 		req.SetRedirectsToPrint()
-		// fmt.Printf("initially requesting: %s\n", req.Url)
 		reqResult := req.Exec()
-		fmt.Printf("request took: %s\n", reqResult.Timing)
+		reqResult.PrettyPrint()
 		if reqResult.Err != nil {
 			return reqResult.Err
 		}
