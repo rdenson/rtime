@@ -27,11 +27,10 @@ type Requester interface {
 }
 
 type Request struct {
-	chResult chan *Result
-	client   Requester
-	httpreq  *http.Request
-	timeout  time.Duration
-	url      string
+	client  Requester
+	httpreq *http.Request
+	timeout time.Duration
+	url     string
 }
 
 func (r *Request) Exec() *Result {
@@ -50,10 +49,6 @@ func (r *Request) Exec() *Result {
 	reqResult.SetStatusFromResponse()
 
 	return reqResult
-}
-
-func (r *Request) ExecAsync(ch chan *Result) {
-	ch <- r.Exec()
 }
 
 func (r *Request) GetClient() Requester {
@@ -110,7 +105,6 @@ func (r *Request) UsesHttpClient() bool {
 
 func NewRequest(options ...requestOption) (*Request, error) {
 	r := &Request{
-		chResult: make(chan *Result, 1),
 		client: &http.Client{
 			Timeout:   defaultTimeout,
 			Transport: standardTransport,

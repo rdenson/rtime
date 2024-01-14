@@ -284,9 +284,7 @@ func (suite *requestTestSuite) TestSetupGet() {
 				suite.Equal(scenario.expects, err.(*url.Error).Err)
 			} else {
 				suite.Nil(err)
-
-				// shims to help with scenario.expects equality comparison
-				scenario.expects.(*Request).chResult = r.chResult
+				// shim to help with scenario.expects equality comparison
 				scenario.setHttpRequest()
 
 				suite.Equal(scenario.expects, r)

@@ -22,9 +22,8 @@ var pageCmd = &cobra.Command{
 		}
 
 		req.SetRedirectsToPrint()
-		// fmt.Printf("initially requesting: %s\n", req.Url)
 		reqResult := req.Exec()
-		fmt.Printf("request took: %s\n", reqResult.Timing)
+		reqResult.PrettyPrint()
 		if reqResult.Err != nil {
 			return reqResult.Err
 		}
@@ -44,17 +43,31 @@ var pageCmd = &cobra.Command{
 					break
 				}
 
+				if reqResult.Err == nil {
+					timings = append(timings, reqResult)
+				}
+
 				wg.Done()
-				timings = append(timings, reqResult)
 			}
 		}(resourceWg)
+		initialClient := req.GetClient()
 		for _, resourcePath := range resourcesToResolve {
 			resourceWg.Add(1)
-			fmt.Printf(">>> requesting %s\n", resourcePath)
-			go req.ExecAsync(
-				timingCh,
-				// resourceWg,
-			)
+			// fmt.Printf(">>> requesting %s\n", resourcePath)
+			// go req.ExecAsync(
+			// 	timingCh,
+			// )
+			go func(u string, ch chan *resource.Result) {
+				r, err := resource.NewRequest(
+					resource.OptionRequestClient(initialClient),
+					resource.OptionRequestUrl(u),
+				)
+				if err != nil {
+					fmt.Printf("error requesting %s: %s\n", u, err.Error())
+				}
+
+				ch <- r.Exec()
+			}(resourcePath, timingCh)
 		}
 
 		resourceWg.Wait()
