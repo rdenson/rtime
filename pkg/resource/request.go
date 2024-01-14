@@ -73,7 +73,12 @@ func (r *Request) SetRedirectsToPrint() {
 }
 
 func (r *Request) SetupGet(u string) error {
-	r.url = u
+	if !strings.Contains(u, "http") {
+		r.url = fmt.Sprintf("https://%s", u)
+	} else {
+		r.url = u
+	}
+
 	formattedUrl, err := url.Parse(r.url)
 	if err != nil {
 		return err

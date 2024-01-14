@@ -2,11 +2,14 @@ package resource
 
 import (
 	"bytes"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 )
@@ -16,6 +19,19 @@ type requestTestCase struct {
 	url     string
 	hclient *httpClientMock
 	expects any
+}
+
+func (tc *requestTestCase) setHttpRequest() {
+	var err error
+
+	tc.expects.(*Request).httpreq, err = http.NewRequest(
+		http.MethodGet,
+		tc.expects.(*Request).url,
+		nil,
+	)
+	if err != nil {
+		panic(err)
+	}
 }
 
 type requestTestSuite struct {
@@ -78,9 +94,32 @@ func fakeHttpClient(responseContent string, responseStatusCode int, headers http
 
 // testing fixure
 var (
-	fixtureHtmlResponse string = "<!DOCTYPE html><html><body>some body content</body></html>"
-	fixtureUrl          string = "http://www.example.com"
-	errHttpClientDo     error  = fmt.Errorf("error in http.Client.do()")
+	errHttpClientDo           error        = fmt.Errorf("error in http.Client.do()")
+	errUrlnvalid              error        = fmt.Errorf("net/url: invalid control character in URL")
+	fixtureHtmlResponse       string       = "<!DOCTYPE html><html><body>some body content</body></html>"
+	fixtureInsecureHttpClient *http.Client = &http.Client{
+		Timeout: defaultTimeout,
+		Transport: &http.Transport{
+			DisableCompression: true,
+			DisableKeepAlives:  true,
+			IdleConnTimeout:    1 * time.Second,
+			MaxIdleConns:       1,
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+	fixtureStandardHttpClient *http.Client = &http.Client{
+		Timeout:   defaultTimeout,
+		Transport: standardTransport,
+	}
+	fixtureUrl             string = "http://example.com"
+	fixtureUrlInsecure     string = "http://wwww.domain.com"
+	fixtureUrlNoScheme     string = "example.com"
+	fixtureUrlSecure       string = "https://example.com"
+	fixtureUrlWithCrtlChar []byte = []byte{
+		'h', 't', 't', 'p', 's', ':', '/', '/', 0x15,
+	}
 )
 
 func TestRequest(t *testing.T) {
@@ -130,6 +169,7 @@ func (suite *requestTestSuite) TestReal() {
 
 	err = r.SetupGet("https://www.arstechnica.com")
 	suite.Nil(err)
+
 	res = r.Exec()
 	suite.T().Logf("result: %+v", res)
 
@@ -172,13 +212,11 @@ func (suite *requestTestSuite) TestExec() {
 			name: "returns request error captured in result",
 			url:  fixtureUrl,
 			hclient: fakeHttpClient(
-				fixtureHtmlResponse,
-				// status doesn't matter here
+				// response data doesn't matter here
 				// if r.client.Do(...) returns an error, the request did not execute
+				"",
 				0,
-				http.Header{
-					"Content-Type": []string{"text/html", "charset=utf-8"},
-				},
+				nil,
 				errHttpClientDo,
 			),
 			expects: &Result{
@@ -205,6 +243,54 @@ func (suite *requestTestSuite) TestExec() {
 			}
 
 			suite.Equal(scenario.expects, res)
+		})
+	}
+}
+
+func (suite *requestTestSuite) TestSetupGet() {
+	testCases := []requestTestCase{
+		{
+			name: "sets scheme for request if not set",
+			url:  fixtureUrlNoScheme,
+			expects: &Request{
+				client:  fixtureStandardHttpClient,
+				timeout: defaultTimeout,
+				url:     fixtureUrlSecure,
+			},
+		},
+		{
+			name: "sets insecure transport for insecure url",
+			url:  fixtureUrlInsecure,
+			expects: &Request{
+				client:  fixtureInsecureHttpClient,
+				timeout: defaultTimeout,
+				url:     fixtureUrlInsecure,
+			},
+		},
+		{
+			name:    "returns error if url cannot be parsed",
+			url:     string(fixtureUrlWithCrtlChar),
+			expects: errUrlnvalid,
+		},
+	}
+
+	for _, scenario := range testCases {
+		suite.Run(scenario.name, func() {
+			r, err := NewRequest()
+			suite.Nil(err)
+
+			err = r.SetupGet(scenario.url)
+			if err != nil {
+				suite.Equal(scenario.expects, err.(*url.Error).Err)
+			} else {
+				suite.Nil(err)
+
+				// shims to help with scenario.expects equality comparison
+				scenario.expects.(*Request).chResult = r.chResult
+				scenario.setHttpRequest()
+
+				suite.Equal(scenario.expects, r)
+			}
 		})
 	}
 }
