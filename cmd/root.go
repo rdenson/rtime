@@ -5,6 +5,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -31,6 +33,12 @@ func Execute() {
 }
 
 func init() {
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	log.Logger = log.Output(zerolog.ConsoleWriter{
+		Out:        os.Stdout,
+		TimeFormat: time.RFC3339,
+	})
+
 	rootCmd.AddCommand(endpointCmd)
 	rootCmd.AddCommand(pageCmd)
 	rootCmd.AddCommand(versionCmd)

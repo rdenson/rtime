@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/rdenson/rtime/pkg/resource"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -21,8 +22,9 @@ var pageCmd = &cobra.Command{
 			return res.GetError()
 		}
 
-		fmt.Printf(
-			"%s responded in with %d in %.3fs\n",
+		pageLog := log.With().Str("request level", "initial").Logger()
+		pageLog.Info().Msgf(
+			"%s responded in with %d in %.3fs",
 			res.GetResponseUrl(),
 			res.GetStatus(),
 			res.GetTiming().Seconds(),
@@ -31,10 +33,8 @@ var pageCmd = &cobra.Command{
 			showResponseHeaders(res.GetHeaders())
 		}
 
-		fmt.Print("trying to resolve page resources... ")
 		resourcesToResolve := res.GetResourcesInResponse()
-		fmt.Printf("resources found: %d\n", len(resourcesToResolve))
-
+		pageLog.Info().Int("included resources", len(resourcesToResolve)).Msg("resolving requests...")
 		asyncResults := resource.NewRequestResultset(resource.MakeRequest)
 		go asyncResults.ReceiveResults()
 		for _, resourcePath := range resourcesToResolve {
@@ -44,23 +44,26 @@ var pageCmd = &cobra.Command{
 		asyncResults.Wait()
 
 		if showPageResources {
+			subResourceLog := log.With().Str("request level", "included").Logger()
 			errs := asyncResults.GetErroredResults()
 			rok := asyncResults.GetSuccessfulResults()
-			fmt.Println("resource requests")
-			fmt.Printf("%*serrors (%d)\n", 2, " ", len(errs))
+			subResourceLog.Info().Int("request errors", len(errs)).Send()
 			for _, e := range errs {
 				fmt.Printf("%*s%s\n", 2, " ", e.Summarize())
 			}
 
-			fmt.Printf("%*sresponses (%d)\n", 2, " ", len(rok))
+			subResourceLog.Info().Int("request responses", len(rok)).Send()
 			for _, r := range rok {
 				fmt.Printf("%*s%s\n", 2, " ", r.Summarize())
 			}
 		}
 
 		longestRequest := asyncResults.GetLongestRequest()
-		fmt.Printf("longest request: %s\n", longestRequest.Summarize())
-		fmt.Printf("total request estimated at %s\n", res.GetTiming()+longestRequest.GetTiming())
+		log.Info().Str(
+			"longest request", longestRequest.GetResponseUrl(),
+		).Float64(
+			"time (ms)", float64(longestRequest.GetTiming().Milliseconds()),
+		).Msgf("total request estimated at %s", res.GetTiming()+longestRequest.GetTiming())
 		if analyzeTls, _ := cmd.Flags().GetBool("analyze-tls"); analyzeTls {
 			showResponseTlsInfo(res.GetTlsState())
 		}
